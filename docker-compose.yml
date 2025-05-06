@@ -1,7 +1,12 @@
 services:
   ros2_playground:
-    build: .
+    build:
+      context: .
+      args:
+        NUM_USERS: 4
     container_name: ros2_playground
     hostname: playground
+    environment:
+      - NUM_USERS=4
     ports:
       - "2222:22"  # Host port 2222 maps to container port 22
