@@ -1,48 +1,40 @@
 FROM ros:jazzy
 
+# Set the number of user to create (default: 4)
+ARG NUM_USERS=4
+ENV NUM_USERS=${NUM_USERS}
+
 # Install packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ~nros-${ROS_DISTRO}-rqt* \
     ros-${ROS_DISTRO}-demo-nodes-cpp \
     ros-${ROS_DISTRO}-demo-nodes-py \
     ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
+    ros-${ROS_DISTRO}-turtlesim \
     openssh-server \
+    xauth \
     git \
     sudo \
     vim \
     nano \
+    terminator \
     && rm -rf /var/lib/apt/lists/*
 
 # Setup SSH
 RUN mkdir /var/run/sshd
 
-# Create users and workspaces
-ARG USERS="user1 user2 user3"
-RUN for user in $USERS; do \
-    useradd -m -s /bin/bash $user && \
-    echo "$user:$user" | chpasswd && \
-    mkdir -p /home/$user/my_ws/src && \
-    chown -R $user:$user /home/$user/my_ws && \
-    echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/$user/.bashrc && \
-    echo 'export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' >> /home/$user/.bashrc && \
-    echo 'export ROS_DOMAIN_ID=42' >> /home/$user/.bashrc; \
-    done
+# Create users and  their workspaces
+COPY create_users.sh /usr/local/bin/create_users.sh
+RUN chmod +x /usr/local/bin/create_users.sh
 
-# Add 'admin' user with sudo privileges
-RUN useradd -m -s /bin/bash admin && \
-    echo "admin:admin" | chpasswd && \
-    usermod -aG sudo admin && \
-    echo "admin ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
-    mkdir -p /home/admin/my_ws/src && \
-    chown -R admin:admin /home/admin/my_ws && \
-    echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/admin/.bashrc && \
-    echo 'export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' >> /home/admin/.bashrc && \
-    echo 'export ROS_DOMAIN_ID=42' >> /home/admin/.bashrc
-
-# Set SSH to allow password authentication
-RUN sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+# Set SSH to allow password authentication and X11 forwarding
+RUN sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#X11Forwarding no/X11Forwarding yes/' /etc/ssh/sshd_config && \
+    sed -i 's|#X11DisplayOffset 10|X11DisplayOffset 10|' /etc/ssh/sshd_config && \
+    sed -i 's|#X11UseLocalhost yes|X11UseLocalhost no|' /etc/ssh/sshd_config
 
 # Expose SSH port
 EXPOSE 22
 
-# Start SSH by default
+ENTRYPOINT [ "/usr/local/bin/create_users.sh" ]
 CMD ["/usr/sbin/sshd", "-D"]
